@@ -36,10 +36,17 @@ enum {
 #define CMD_RIGHT  11
 #define CMD_SELECT 12
 
+// 1000 = 20s
+// 30000 = 10m
+#define RAIN_HYSTER_START 15000
+#define BUTTON_WAIT_START 10
+
 SoftwareSerial rs485(2,3);
 ModbusSlave mbs;
 boolean change=false;
 int camera=SCB2K;
+int buttonWait=0;
+int rainHyster=0;
 int regs[MB_REGS];
 int r1 = 0;
 int r2 = 0;
@@ -119,7 +126,7 @@ void sendCmd(int c1, int c2, int d1, int d2, int cksum) {
   rs485.write(d1);
   rs485.write(d2);
   rs485.write(cksum);
-  delay(100);
+  delay(50);
   digitalWrite(TX_ENABLE, LOW);
   rs485.flush();
 }
@@ -128,37 +135,43 @@ void loop() {
 
   // GET BUTTON STATUS
   
-  regs[MB_UP]=!digitalRead(BUTTON_UP);
-  regs[MB_DOWN]=!digitalRead(BUTTON_DOWN);
-  regs[MB_LEFT]=!digitalRead(BUTTON_LEFT);
-  regs[MB_RIGHT]=!digitalRead(BUTTON_RIGHT);
-  regs[MB_SELECT]=!digitalRead(BUTTON_SELECT);
-  if(camera==SCB2K) {
-    if(regs[MB_UP]==1) { change=true; digitalWrite(CMD_UP, HIGH); }
-    if(regs[MB_DOWN]==1) { change=true; digitalWrite(CMD_DOWN, HIGH); }
-    if(regs[MB_LEFT]==1) { change=true; digitalWrite(CMD_LEFT, HIGH); }
-    if(regs[MB_RIGHT]==1) { change=true; digitalWrite(CMD_RIGHT, HIGH); }
-    if(regs[MB_SELECT]==1) { change=true; digitalWrite(CMD_SELECT, HIGH); }
-    if(change) {
-      delay(100);
-      digitalWrite(CMD_UP, LOW);
-      digitalWrite(CMD_DOWN, LOW);
-      digitalWrite(CMD_LEFT, LOW);
-      digitalWrite(CMD_RIGHT, LOW);
-      digitalWrite(CMD_SELECT, LOW);
-      change=false;
+  if(buttonWait<1) {
+    regs[MB_UP]=!digitalRead(BUTTON_UP);
+    regs[MB_DOWN]=!digitalRead(BUTTON_DOWN);
+    regs[MB_LEFT]=!digitalRead(BUTTON_LEFT);
+    regs[MB_RIGHT]=!digitalRead(BUTTON_RIGHT);
+    regs[MB_SELECT]=!digitalRead(BUTTON_SELECT);
+    if(camera==SCB2K) {
+      if(regs[MB_UP]==1) { change=true; digitalWrite(CMD_UP, HIGH); }
+      if(regs[MB_DOWN]==1) { change=true; digitalWrite(CMD_DOWN, HIGH); }
+      if(regs[MB_LEFT]==1) { change=true; digitalWrite(CMD_LEFT, HIGH); }
+      if(regs[MB_RIGHT]==1) { change=true; digitalWrite(CMD_RIGHT, HIGH); }
+      if(regs[MB_SELECT]==1) { change=true; digitalWrite(CMD_SELECT, HIGH); }
+      if(change) {
+        delay(50);
+        digitalWrite(CMD_UP, LOW);
+        digitalWrite(CMD_DOWN, LOW);
+        digitalWrite(CMD_LEFT, LOW);
+        digitalWrite(CMD_RIGHT, LOW);
+        digitalWrite(CMD_SELECT, LOW);
+        change=false;
+        buttonWait=BUTTON_WAIT_START;
+      }
+    }
+    else { // SCH735  
+      if(regs[MB_UP]==1) { change=true; sendUp(); }
+      if(regs[MB_DOWN]==1) { change=true; sendDown(); }
+      if(regs[MB_LEFT]==1) { change=true; sendLeft(); }
+      if(regs[MB_RIGHT]==1) { change=true; sendRight(); }
+      if(regs[MB_SELECT]==1) { change=true; sendSelect(); }
+      if(change) {
+        change=false;
+        buttonWait=BUTTON_WAIT_START;
+      }
     }
   }
-  else { // SCH735  
-    if(regs[MB_UP]==1) { change=true; sendUp(); }
-    if(regs[MB_DOWN]==1) { change=true; sendDown(); }
-    if(regs[MB_LEFT]==1) { change=true; sendLeft(); }
-    if(regs[MB_RIGHT]==1) { change=true; sendRight(); }
-    if(regs[MB_SELECT]==1) { change=true; sendSelect(); }
-    if(change) {
-      delay(100);
-      change=false;
-    }
+  else {
+    buttonWait--;
   }
   
   for(byte i=0; i<MB_REGS; i++)
@@ -167,7 +180,7 @@ void loop() {
   // GET PHOTOCELL STATUS
 
   r1 = digitalRead(PHOTO_CELL);
-  delay(100);
+  delay(10);
   r2 = digitalRead(PHOTO_CELL); // 2nd check
   if (r2 == r1) {
     regs[MB_PHOTO_CELL]=r1;
@@ -175,7 +188,15 @@ void loop() {
 
   // GET RAIN SENSOR STATUS
 
-  regs[MB_RAIN_SENS]=!digitalRead(RAIN_SENS);
+  if(rainHyster<1) {
+    regs[MB_RAIN_SENS]=!digitalRead(RAIN_SENS);
+    if(regs[MB_RAIN_SENS]==1)
+      rainHyster=RAIN_HYSTER_START;
+  }
+  else {
+    regs[MB_RAIN_SENS]=1;
+    rainHyster--;
+  }
 
   // SET CAMERA
   
@@ -192,7 +213,7 @@ void loop() {
       if(regs[MB_RIGHT]==1) { change=true; digitalWrite(CMD_RIGHT, HIGH); }
       if(regs[MB_SELECT]==1) { change=true; digitalWrite(CMD_SELECT, HIGH); }
       if(change) {
-        delay(100);
+        delay(50);
         digitalWrite(CMD_UP, LOW);
         digitalWrite(CMD_DOWN, LOW);
         digitalWrite(CMD_LEFT, LOW);
@@ -208,14 +229,13 @@ void loop() {
       if(regs[MB_RIGHT]==1) { change=true; sendRight(); }
       if(regs[MB_SELECT]==1) { change=true; sendSelect(); }
       if(change) {
-        delay(100);
         change=false;
       }
     }
     for(byte i=0; i<MB_REGS; i++)
       regs[i]=0;
   }
-delay(500);
+  delay(10);
 }
 
 
