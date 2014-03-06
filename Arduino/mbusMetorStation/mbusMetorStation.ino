@@ -47,6 +47,7 @@ boolean change=false;
 int camera=SCB2K;
 int buttonWait=0;
 int rainHyster=0;
+int rainSens=0;
 int regs[MB_REGS];
 int r1 = 0;
 int r2 = 0;
@@ -188,15 +189,15 @@ void loop() {
 
   // GET RAIN SENSOR STATUS
 
-  if(rainHyster<1) {
-    regs[MB_RAIN_SENS]=!digitalRead(RAIN_SENS);
-    if(regs[MB_RAIN_SENS]==1)
-      rainHyster=RAIN_HYSTER_START;
-  }
-  else {
+  rainSens=!digitalRead(RAIN_SENS);
+  if(rainSens==1)
+    rainHyster=RAIN_HYSTER_START; // reset counter
+  if(rainHyster>0) {
     regs[MB_RAIN_SENS]=1;
     rainHyster--;
   }
+  else
+    regs[MB_RAIN_SENS]=0;
 
   // SET CAMERA
   
